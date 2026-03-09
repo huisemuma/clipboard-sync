@@ -38,8 +38,8 @@ fi
 
 echo ""
 
-# 启动服务
-node clipboard-sync.mjs
+# 启动服务（可选自定义端口，默认 9898）
+node clipboard-sync.mjs $1
 
 # 如果意外退出
 echo ""

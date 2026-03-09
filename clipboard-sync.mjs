@@ -7,7 +7,7 @@ import { WebSocketServer } from 'ws';
 import { execSync } from 'child_process';
 import { networkInterfaces } from 'os';
 
-const PORT = 9898;
+const PORT = parseInt(process.argv[2]) || 9898;
 
 function getLocalIP() {
   const nets = networkInterfaces();
@@ -23,22 +23,22 @@ const HTML = `<!DOCTYPE html>
 <html lang="zh">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <title>剪贴板同步</title>
 <style>
   * { margin:0; padding:0; box-sizing:border-box; }
   body { font-family:-apple-system,sans-serif; background:#1a1a2e; color:#eee;
-         display:flex; flex-direction:column; height:100dvh; padding:16px; }
-  h1 { font-size:18px; text-align:center; margin-bottom:12px; color:#8be9fd; }
-  #status { text-align:center; font-size:13px; margin-bottom:12px; }
+         display:flex; flex-direction:column; height:50dvh; padding:8px 16px env(safe-area-inset-bottom); }
+  h1 { font-size:15px; text-align:center; margin-bottom:6px; color:#8be9fd; }
+  #status { text-align:center; font-size:12px; margin-bottom:8px; }
   .dot { display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:6px; }
   .on { background:#50fa7b; }
   .off { background:#ff5555; }
-  textarea { width:100%; height:80px; background:#16213e; border:1px solid #333;
+  textarea { width:100%; flex:1; min-height:0; background:#16213e; border:1px solid #333;
              border-radius:12px; padding:14px; font-size:16px; color:#eee;
              resize:none; outline:none; line-height:1.6; }
   textarea:focus { border-color:#8be9fd; }
-  .actions { display:flex; gap:10px; margin-top:12px; }
+  .actions { display:flex; gap:10px; margin-top:8px; flex-shrink:0; }
   button { flex:1; padding:14px; border:none; border-radius:12px; font-size:16px;
            font-weight:600; cursor:pointer; transition:all .15s; }
   #sendBtn { background:#8be9fd; color:#1a1a2e; }
@@ -56,7 +56,7 @@ const HTML = `<!DOCTYPE html>
 <div id="status"><span class="dot off" id="dot"></span><span id="stxt">连接中...</span></div>
 <textarea id="input" placeholder="在这里用语音输入或打字，点发送同步到电脑剪贴板" autofocus></textarea>
 <div class="actions">
-  <button id="clearBtn" onclick="input.value=''">清空</button>
+  <button id="clearBtn" onclick="input.value='';input.focus()">清空</button>
   <button id="sendBtn" onclick="send()">发送到电脑</button>
 </div>
 <div class="toast" id="toast"></div>
