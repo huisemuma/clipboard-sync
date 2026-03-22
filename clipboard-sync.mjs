@@ -1,22 +1,79 @@
 #!/usr/bin/env node
 // 语音剪贴板同步 — 局域网版
-// 手机浏览器打开 http://电脑IP:9898 → 输入文字 → 点发送 → Mac 剪贴板自动有
+// 手机浏览器打开 http://电脑IP:9898 → 输入文字 → 点发送 → 电脑剪贴板自动有
 
 import { createServer } from 'http';
 import { WebSocketServer } from 'ws';
 import { execSync } from 'child_process';
-import { networkInterfaces } from 'os';
+import { writeFileSync, unlinkSync } from 'fs';
+import { networkInterfaces, platform, tmpdir } from 'os';
+import { join } from 'path';
+import qrcode from 'qrcode-terminal';
 
-const PORT = parseInt(process.argv[2]) || 9898;
+const IS_WIN = platform() === 'win32';
+const IS_MAC = platform() === 'darwin';
 
-function getLocalIP() {
-  const nets = networkInterfaces();
-  for (const name of Object.keys(nets)) {
-    for (const net of nets[name]) {
-      if (net.family === 'IPv4' && !net.internal) return net.address;
+function copyToClipboard(text) {
+  if (IS_WIN) {
+    const tmp = join(tmpdir(), `_cb_sync_${process.pid}.txt`);
+    writeFileSync(tmp, text, 'utf8');
+    try {
+      execSync(`powershell -NoProfile -Command "Set-Clipboard (Get-Content -Raw -Encoding UTF8 '${tmp}')"`);
+    } finally {
+      try { unlinkSync(tmp); } catch {}
+    }
+  } else if (IS_MAC) {
+    execSync('pbcopy', { input: text });
+  } else {
+    // Linux: try xclip, then xsel
+    try {
+      execSync('xclip -selection clipboard', { input: text });
+    } catch {
+      execSync('xsel --clipboard --input', { input: text });
     }
   }
-  return 'localhost';
+}
+
+// 解析命令行参数: node clipboard-sync.mjs [port] [--ip x.x.x.x]
+let PORT = 9898;
+let PREFERRED_IP = null;
+for (let i = 2; i < process.argv.length; i++) {
+  if (process.argv[i] === '--ip' && process.argv[i + 1]) {
+    PREFERRED_IP = process.argv[++i];
+  } else if (/^\d+$/.test(process.argv[i])) {
+    PORT = parseInt(process.argv[i]);
+  }
+}
+
+function getAllIPs() {
+  const nets = networkInterfaces();
+  const results = [];
+  for (const name of Object.keys(nets)) {
+    for (const net of nets[name]) {
+      if (net.family === 'IPv4' && !net.internal) {
+        results.push({ name, address: net.address });
+      }
+    }
+  }
+  // 排序: 真实网卡优先，虚拟网卡靠后; 同类中 192.168 > 10 > 172 > 其他
+  const VIRTUAL_RE = /virtual|vmware|vmnet|vbox|virtualbox|hyper-v|vethernet|docker|wsl|tailscale|zerotier|hamachi/i;
+  results.sort((a, b) => {
+    const isVirtual = (name, ip) => {
+      if (VIRTUAL_RE.test(name)) return 1;
+      // VirtualBox Host-Only 默认网段
+      if (ip.startsWith('192.168.56.')) return 1;
+      return 0;
+    };
+    const ipScore = (ip) => {
+      if (ip.startsWith('192.168.')) return 0;
+      if (ip.startsWith('10.')) return 1;
+      if (/^172\.(1[6-9]|2\d|3[01])\./.test(ip)) return 2;
+      return 3;
+    };
+    // 先按虚拟网卡排后，再按 IP 段排序
+    return (isVirtual(a.name, a.address) - isVirtual(b.name, b.address)) || (ipScore(a.address) - ipScore(b.address));
+  });
+  return results;
 }
 
 const HTML = `<!DOCTYPE html>
@@ -113,7 +170,7 @@ wss.on('connection', (ws) => {
     try {
       const { text } = JSON.parse(raw);
       if (!text) return;
-      execSync('pbcopy', { input: text });
+      copyToClipboard(text);
       console.log(`[同步] ${text.length}字 → 剪贴板 | ${text.slice(0, 50)}${text.length > 50 ? '...' : ''}`);
       ws.send(JSON.stringify({ ok: true }));
     } catch (e) {
@@ -124,8 +181,36 @@ wss.on('connection', (ws) => {
 });
 
 server.listen(PORT, '0.0.0.0', () => {
-  const ip = getLocalIP();
+  const allIPs = getAllIPs();
+  const pasteHint = IS_MAC ? 'Cmd+V' : 'Ctrl+V';
+
+  // 确定主 IP: --ip 指定 > 自动排序第一个 > localhost
+  let primaryIP = 'localhost';
+  if (PREFERRED_IP) {
+    primaryIP = PREFERRED_IP;
+  } else if (allIPs.length > 0) {
+    primaryIP = allIPs[0].address;
+  }
+  const primaryUrl = `http://${primaryIP}:${PORT}`;
+
   console.log(`\n📋 剪贴板同步已启动`);
-  console.log(`   手机浏览器打开: http://${ip}:${PORT}`);
-  console.log(`   然后语音输入 → 点发送 → Mac 直接 Cmd+V\n`);
+  console.log(`   然后语音输入 → 点发送 → 电脑直接 ${pasteHint}\n`);
+
+  if (allIPs.length > 0) {
+    console.log('   可用地址:');
+    for (const { name, address } of allIPs) {
+      const tag = address === primaryIP ? ' ← 二维码' : '';
+      console.log(`   ${address === primaryIP ? '→' : ' '} http://${address}:${PORT}  (${name})${tag}`);
+    }
+    console.log('');
+    if (!PREFERRED_IP && allIPs.length > 1) {
+      console.log(`   如果地址不对，用 --ip 指定: node clipboard-sync.mjs --ip ${allIPs.length > 1 ? allIPs[1].address : 'x.x.x.x'}\n`);
+    }
+  } else {
+    console.log(`   手机浏览器打开: ${primaryUrl}\n`);
+  }
+
+  qrcode.generate(primaryUrl, { small: true }, (code) => {
+    console.log(code);
+  });
 });

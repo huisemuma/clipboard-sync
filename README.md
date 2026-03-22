@@ -13,30 +13,38 @@
 ## 工作原理
 
 ```
-手机浏览器 ──WebSocket──→ Mac Node.js 服务 ──pbcopy──→ 系统剪贴板
+手机浏览器 ──WebSocket──→ Node.js 服务 ──剪贴板命令──→ 系统剪贴板
 ```
 
-- Mac 端运行一个轻量 Node.js 服务（端口 9898）
+- 电脑端运行一个轻量 Node.js 服务（端口 9898）
 - 手机在同一 WiFi 下用浏览器打开服务地址
-- 手机输入文字（语音/打字均可）→ 点发送 → 通过 WebSocket 实时推送到 Mac
-- Mac 收到后自动写入系统剪贴板，Cmd+V 即可粘贴
+- 手机输入文字（语音/打字均可）→ 点发送 → 通过 WebSocket 实时推送到电脑
+- 电脑收到后自动写入系统剪贴板（macOS 用 `pbcopy`，Windows 用 `Set-Clipboard`，Linux 用 `xclip`/`xsel`）
 - 配合豆包输入法等语音输入法效果最佳——手机语音识别能力远超电脑端
 
 ## 快速开始
 
 ### 前置要求
 
-- macOS（Apple Silicon / Intel 均可）
+- macOS / Windows / Linux
 - Node.js（v18+）
 - 手机和电脑在同一 WiFi
 
 ### 启动
 
-**方式一：双击启动（推荐）**
+**macOS：双击启动（推荐）**
 
 双击 `启动剪贴板同步.command` 文件，首次运行会自动安装依赖。
 
-**方式二：命令行启动**
+**Windows：PowerShell 启动（推荐）**
+
+右键 `start-clipboard-sync.ps1` →「使用 PowerShell 运行」，或在终端中执行：
+
+```powershell
+.\start-clipboard-sync.ps1
+```
+
+**命令行启动（所有平台）**
 
 ```bash
 cd clipboard-sync
@@ -48,7 +56,7 @@ node clipboard-sync.mjs
 ```
 📋 剪贴板同步已启动
    手机浏览器打开: http://192.168.x.x:9898
-   然后语音输入 → 点发送 → Mac 直接 Cmd+V
+   然后语音输入 → 点发送 → 电脑直接 Ctrl+V / Cmd+V
 ```
 
 ### 使用
@@ -57,7 +65,7 @@ node clipboard-sync.mjs
 2. 页面顶部绿点亮起 = 已连接
 3. 在输入框里语音输入或打字
 4. 点「发送到电脑」（或按 Enter）
-5. 电脑上 Cmd+V 粘贴
+5. 电脑上 Ctrl+V / Cmd+V 粘贴
 
 用完关终端窗口即可。
 
@@ -68,7 +76,7 @@ node clipboard-sync.mjs
 | 运行时 | Node.js + ws 库 |
 | 端口 | 9898 |
 | 协议 | HTTP（页面）+ WebSocket（实时通信） |
-| 剪贴板写入 | macOS `pbcopy` 命令 |
+| 剪贴板写入 | macOS `pbcopy` / Windows `Set-Clipboard` / Linux `xclip` |
 | 前端 | 内嵌 HTML，无需额外文件，暗色主题 |
 | 断线重连 | WebSocket 断开后 1.5s 自动重连 |
 | 依赖 | 仅 `ws`，无其他第三方依赖 |
@@ -79,6 +87,7 @@ node clipboard-sync.mjs
 clipboard-sync/
 ├── clipboard-sync.mjs        # 主服务（HTTP + WebSocket + 内嵌前端）
 ├── 启动剪贴板同步.command      # Mac 双击启动脚本
+├── start-clipboard-sync_windows.ps1   # Windows PowerShell 启动脚本
 ├── 语音剪贴板同步.md           # 设计文档（方案对比、技术选型、扩展规划）
 ├── package.json
 └── README.md                  # 本文件
@@ -101,7 +110,3 @@ clipboard-sync/
 - **E2E 加密 + 不落盘**（面向分享给朋友的场景）
 
 详见 `语音剪贴板同步.md` 中的设计文档。
-
----
-
-*2026-03-08 创建*
